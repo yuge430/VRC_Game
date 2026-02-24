@@ -9,44 +9,56 @@ public class CapturePoint : UdonSharpBehaviour
     public CoreGameManager gameManager;
     public int pointIndex;
     public Transform captureZone;
-    public float zoneRadius = 10f;
-    public float captureSpeed = 0.05f; 
-    [UdonSynced] private int syncProgress;
+    public float zoneRadius = 5.0f;
+    public float captureSpeed = 0.05f;
+
+    [UdonSynced] private float internalProgress = 0;
     [UdonSynced] private int currentOwner = 0;
-    private float internalProgress = 0f;
-    private float scanTimer = 0f;
-    private VRCPlayerApi[] playerBuffer = new VRCPlayerApi[100];
+
+    public float GetProgress()
+    {
+        return internalProgress;
+    }
 
     void Update()
     {
-        if (!Networking.IsMaster || !gameManager.gameRunning) return;
-        scanTimer += Time.deltaTime;
-        if (scanTimer >= 0.5f)
+        if (!Networking.IsMaster) return;
+
+        int b = 0;
+        int r = 0;
+
+        foreach (PlayerStatsManager stats in gameManager.allStatsManagers)
         {
-            int count = VRCPlayerApi.GetPlayerCount();
-            VRCPlayerApi.GetPlayers(playerBuffer);
-            int b = 0; int r = 0;
-            for (int i = 0; i < count; i++)
+            if (stats.ownerPlayerId == -1) continue;
+
+            VRCPlayerApi p = VRCPlayerApi.GetPlayerById(stats.ownerPlayerId);
+            if (Utilities.IsValid(p))
             {
-                if (!Utilities.IsValid(playerBuffer[i])) continue;
-                if (Vector3.Distance(playerBuffer[i].GetPosition(), captureZone.position) <= zoneRadius)
+                if (Vector3.Distance(p.GetPosition(), captureZone.position) <= zoneRadius)
                 {
-                    PlayerStatsManager s = gameManager.GetStatsByPlayer(playerBuffer[i]);
-                    if (s != null) { if (s.IsBlue()) b++; else if (s.IsRed()) r++; }
+                    if (stats.playerTeam == 1) b++;
+                    else if (stats.playerTeam == 2) r++;
                 }
             }
-            int diff = b - r;
-            if (diff == 0) internalProgress = Mathf.MoveTowards(internalProgress, 0f, captureSpeed * 0.5f);
-            else internalProgress = Mathf.Clamp(internalProgress + diff * captureSpeed * 0.5f, -1f, 1f);
-            int nOwner = currentOwner;
-            if (internalProgress >= 0.99f) nOwner = 1;
-            else if (internalProgress <= -0.99f) nOwner = 2;
-            else if (Mathf.Abs(internalProgress) < 0.05f) nOwner = 0;
-            if (nOwner != currentOwner) { currentOwner = nOwner; gameManager.UpdatePointOwner(pointIndex, nOwner); }
-            syncProgress = Mathf.RoundToInt(internalProgress * 100f);
+        }
+
+        float delta = (b - r) * captureSpeed * Time.deltaTime;
+        float prevProgress = internalProgress;
+        internalProgress = Mathf.Clamp(internalProgress + delta, -1.0f, 1.0f);
+
+        int prevOwner = currentOwner;
+        if (internalProgress >= 1.0f) currentOwner = 1;
+        else if (internalProgress <= -1.0f) currentOwner = 2;
+        else if (currentOwner == 1 && internalProgress <= 0) currentOwner = 0;
+        else if (currentOwner == 2 && internalProgress >= 0) currentOwner = 0;
+
+        if (prevProgress != internalProgress || prevOwner != currentOwner)
+        {
+            if (prevOwner != currentOwner)
+            {
+                gameManager.UpdatePointOwner(pointIndex, currentOwner);
+            }
             RequestSerialization();
-            scanTimer = 0f;
         }
     }
-    public override void OnDeserialization() { internalProgress = syncProgress / 100f; }
 }
