@@ -82,6 +82,18 @@ public class CoreGameManager : UdonSharpBehaviour
         }
     }
 
+    public void ReduceTicket(int team, int amount)
+    {
+        if (!Networking.IsMaster) return;
+        if (!gameRunning) return;
+
+        if (team == 1) blueTickets = Mathf.Max(0, blueTickets - amount);
+        else if (team == 2) redTickets = Mathf.Max(0, redTickets - amount);
+
+        if (blueTickets <= 0 || redTickets <= 0) gameRunning = false;
+        RequestSerialization();
+    }
+
     private void CalculateTicketDrain()
     {
         int b = 0; int r = 0;

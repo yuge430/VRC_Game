@@ -11,6 +11,7 @@ public class ChairTrigger : UdonSharpBehaviour
     public Transform robotArm;
     public ParticleSystem muzzleFlash;
     public GameObject sniperScope;
+    public AudioSource shootSound;
 
     [Header("Game System")]
     public CoreGameManager gameManager;
@@ -48,6 +49,7 @@ public class ChairTrigger : UdonSharpBehaviour
         {
             isSeated = false;
             if (muzzleFlash != null) muzzleFlash.Stop();
+            if (shootSound != null) shootSound.Stop();
             if (sniperScope != null) sniperScope.SetActive(false);
             myStats = null;
         }
@@ -55,7 +57,12 @@ public class ChairTrigger : UdonSharpBehaviour
 
     void LateUpdate()
     {
-        if (!isSeated) return;
+        if (!isSeated)
+        {
+            if (muzzleFlash != null && muzzleFlash.isPlaying) muzzleFlash.Stop();
+            if (shootSound != null && shootSound.isPlaying) shootSound.Stop();
+            return;
+        }
 
         if (myStats != null && hpText != null)
         {
@@ -87,15 +94,25 @@ public class ChairTrigger : UdonSharpBehaviour
                 Vector3 lookTarget = headData.position + (headData.rotation * Vector3.forward * 50f);
                 robotArm.LookAt(lookTarget);
             }
-            if (Input.GetButtonDown("Fire1")) { if (muzzleFlash != null) muzzleFlash.Play(); }
-            else if (Input.GetButtonUp("Fire1")) { if (muzzleFlash != null) muzzleFlash.Stop(); }
+            if (Input.GetButtonDown("Fire1")) 
+            { 
+                if (muzzleFlash != null) muzzleFlash.Play();
+                if (shootSound != null) shootSound.Play();
+            }
+            else if (Input.GetButtonUp("Fire1")) 
+            { 
+                if (muzzleFlash != null) muzzleFlash.Stop();
+                if (shootSound != null) shootSound.Stop();
+            }
         }
         else
         {
             if (muzzleFlash != null && muzzleFlash.isPlaying) muzzleFlash.Stop();
+            if (shootSound != null && shootSound.isPlaying) shootSound.Stop();
             if (robotArm != null) robotArm.localRotation = Quaternion.Slerp(robotArm.localRotation, Quaternion.identity, Time.deltaTime * 5f);
         }
 
+        // --- 移動処理 ---
         if (Input.GetKeyDown(KeyCode.LeftShift) && cooldownTimer <= 0)
         {
             dashTimer = 0.2f;
